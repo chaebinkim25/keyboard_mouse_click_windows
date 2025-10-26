@@ -1,12 +1,10 @@
 #include <windows.h>
 #include <stdio.h>
 
-void TimerProc_click(
-    HWND hwnd,
-    UINT uMsg,
-    UINT_PTR idEvent,
-    DWORD dwTime
-) {
+static FILE *log;
+
+void mouse_click()
+{
     INPUT inputs[2] = {};
     ZeroMemory(inputs, sizeof(inputs));
 
@@ -16,9 +14,58 @@ void TimerProc_click(
     inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
 
     UINT uSent = SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+}
 
+void mouse_press()
+{
+    INPUT input = { 0 };
+
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+
+    UINT uSent = SendInput(1, &input, sizeof(INPUT));
+}
+
+void mouse_release()
+{
+    INPUT input = { 0 };
+
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+
+    UINT uSent = SendInput(1, &input, sizeof(INPUT));
+}
+
+void TimerProc_click(
+    HWND hwnd,
+    UINT uMsg,
+    UINT_PTR idEvent,
+    DWORD dwTime
+) {
+    mouse_click();
     KillTimer(NULL, idEvent);
 }
+
+void TimerProc_press(
+    HWND hwnd,
+    UINT uMsg,
+    UINT_PTR idEvent,
+    DWORD dwTime
+) {
+    mouse_press();
+    KillTimer(NULL, idEvent);
+}
+
+void TimerProc_release(
+    HWND hwnd,
+    UINT uMsg,
+    UINT_PTR idEvent,
+    DWORD dwTime
+) {
+    mouse_release();
+    KillTimer(NULL, idEvent);
+}
+
 
 LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     static int i = 0;
@@ -32,25 +79,34 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
         {
-            if (wParam == WM_KEYDOWN)
-                printf("wm");
-            else if (wParam == WM_SYSKEYDOWN)
-                printf("sys");
+            if (wParam == WM_KEYDOWN) {
+                fprintf(log, "wm");
+            }
+            else if (wParam == WM_SYSKEYDOWN) {
+                fprintf(log, "sys");
+            }
 
             if (vkCode >= 256) {
-                printf("vkCode[%d] >= 256.. unexpected\n", vkCode);
+                fprintf(log, "vkCode[%d] >= 256.. unexpected\n", vkCode);
                 break;
+            }
+            else if (vkCode == VK_ESCAPE) {
+                fprintf(log, "keydown[%d].. quitting\n", vkCode);
+                PostQuitMessage(0);
+                return TRUE;
             }
 
             int should_click = 0;
-            if (vkCode == 192 && !key_down[vkCode])
+            if (vkCode == 192 && !key_down[vkCode]) {       
                 should_click = 1;
+            }
 
             key_down[vkCode] = 1;
-            printf("keydown[%d] %d\n", vkCode, i++);
+            fprintf(log, "keydown[%d] %d, flags[%d]\n", vkCode, i++, pKeyBoard->flags);
 
-            if (should_click) {
-                SetTimer(NULL, 0, 50, TimerProc_click);
+            if (vkCode == 192) {
+                if (should_click)
+                    SetTimer(NULL, 0, 50, TimerProc_click);
                 return TRUE;
             }
 
@@ -60,13 +116,16 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         case WM_SYSKEYUP:
         {
             if (wParam == WM_KEYUP)
-                printf("wm");
+                fprintf(log, "wm");
             else if (wParam == WM_SYSKEYUP)
-                printf("sys");
+                fprintf(log, "sys");
 
 
             key_down[vkCode] = 0;
-            printf("keyup[%d]\n", vkCode);
+            fprintf(log, "keyup[%d] %d, flags[%d]\n", vkCode, i++, pKeyBoard->flags);
+
+            if (vkCode == 192)
+                return TRUE;
 
             break;
         }
@@ -75,7 +134,17 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
-int main() {
+int main() 
+{
+    fopen_s(&log, "log.txt", "w");
+    if (!log) {
+        printf("cannot open log file.. exit\n");
+        return 0;
+    }
+
+    HWND hwnd_console = GetConsoleWindow();
+    ShowWindow(hwnd_console, SW_HIDE);
+    
     HHOOK hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, 0);
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
@@ -83,5 +152,9 @@ int main() {
         DispatchMessage(&msg);
     }
     UnhookWindowsHookEx(hHook);
+
+    if (log) 
+        fclose(log);
+
     return 0;
 }
