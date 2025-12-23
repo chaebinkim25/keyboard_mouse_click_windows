@@ -16,7 +16,7 @@ void mouse_click()
     UINT uSent = SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
 }
 
-void mouse_press()
+void mouse_press_left()
 {
     INPUT input = { 0 };
 
@@ -26,12 +26,32 @@ void mouse_press()
     UINT uSent = SendInput(1, &input, sizeof(INPUT));
 }
 
-void mouse_release()
+void mouse_release_left()
 {
     INPUT input = { 0 };
 
     input.type = INPUT_MOUSE;
     input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+
+    UINT uSent = SendInput(1, &input, sizeof(INPUT));
+}
+
+void mouse_press_right()
+{
+    INPUT input = { 0 };
+
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
+
+    UINT uSent = SendInput(1, &input, sizeof(INPUT));
+}
+
+void mouse_release_right()
+{
+    INPUT input = { 0 };
+
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_RIGHTUP;
 
     UINT uSent = SendInput(1, &input, sizeof(INPUT));
 }
@@ -46,23 +66,43 @@ void TimerProc_click(
     KillTimer(NULL, idEvent);
 }
 
-void TimerProc_press(
+void TimerProc_press_left(
     HWND hwnd,
     UINT uMsg,
     UINT_PTR idEvent,
     DWORD dwTime
 ) {
-    mouse_press();
+    mouse_press_left();
     KillTimer(NULL, idEvent);
 }
 
-void TimerProc_release(
+void TimerProc_release_left (
     HWND hwnd,
     UINT uMsg,
     UINT_PTR idEvent,
     DWORD dwTime
 ) {
-    mouse_release();
+    mouse_release_left();
+    KillTimer(NULL, idEvent);
+}
+
+void TimerProc_press_right(
+    HWND hwnd,
+    UINT uMsg,
+    UINT_PTR idEvent,
+    DWORD dwTime
+) {
+    mouse_press_right();
+    KillTimer(NULL, idEvent);
+}
+
+void TimerProc_release_right(
+    HWND hwnd,
+    UINT uMsg,
+    UINT_PTR idEvent,
+    DWORD dwTime
+) {
+    mouse_release_right();
     KillTimer(NULL, idEvent);
 }
 
@@ -90,23 +130,33 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
                 fprintf(log, "vkCode[%d] >= 256.. unexpected\n", vkCode);
                 break;
             }
-            else if (vkCode == VK_ESCAPE) {
+            else if (vkCode == VK_F3) {
                 fprintf(log, "keydown[%d].. quitting\n", vkCode);
                 PostQuitMessage(0);
                 return TRUE;
             }
 
-            int should_click = 0;
-            if (vkCode == 192 && !key_down[vkCode]) {       
-                should_click = 1;
+            int should_press_l = 0;
+            if (vkCode == VK_F1 && !key_down[vkCode]) {
+                should_press_l = 1;
+            }
+
+            int should_press_r = 0;
+            if (vkCode == VK_F2 && !key_down[vkCode]) {
+                should_press_r = 1;
             }
 
             key_down[vkCode] = 1;
             fprintf(log, "keydown[%d] %d, flags[%d]\n", vkCode, i++, pKeyBoard->flags);
 
-            if (vkCode == 192) {
-                if (should_click)
-                    SetTimer(NULL, 0, 50, TimerProc_click);
+            if (vkCode == VK_F1) {
+                if (should_press_l)
+                    SetTimer(NULL, 0, 50, TimerProc_press_left);
+                return TRUE;
+            }
+            else if (vkCode == VK_F2) {
+                if (should_press_r)
+                    SetTimer(NULL, 0, 50, TimerProc_press_right);
                 return TRUE;
             }
 
@@ -124,8 +174,14 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             key_down[vkCode] = 0;
             fprintf(log, "keyup[%d] %d, flags[%d]\n", vkCode, i++, pKeyBoard->flags);
 
-            if (vkCode == 192)
+            if (vkCode == VK_F1) {
+                SetTimer(NULL, 0, 50, TimerProc_release_left);
                 return TRUE;
+            }
+            if (vkCode == VK_F2) {
+                SetTimer(NULL, 0, 50, TimerProc_release_right);
+                return TRUE;
+            }
 
             break;
         }
